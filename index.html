@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-<meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <title>Dr. Lens contro la Miopia</title>
-  <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#00FFFF">
   <style>
     body {
       margin: 0;
@@ -21,8 +19,8 @@
     
     #game-container {
       position: relative;
-      width: 800px;
-      height: 600px;
+      width: 100vw;
+      height: 100vh;
       border: 4px solid #444;
       box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
       overflow: hidden;
@@ -34,7 +32,6 @@
       background-image: url('https://i.postimg.cc/hjnB5vts/SFONDO.png');
       background-size: cover;
       position: absolute;
-      /* Background più chiaro per aumentare il contrasto */
       filter: brightness(1.2);
     }
     
@@ -51,7 +48,6 @@
       text-align: center;
       position: absolute;
       z-index: 100;
-      /* Background più chiaro per le informazioni */
       filter: brightness(1.1);
     }
     
@@ -218,23 +214,7 @@
   </div>
 
   <script>
-   // Registra il Service Worker
-    if ('serviceWorker' in navigator) {
-      window.addEventListener('load', () => {
-        navigator.serviceWorker.register('/service-worker.js')
-          .then((registration) => {
-            console.log('Service Worker registrato con successo:', registration);
-          })
-          .catch((error) => {
-            console.log('Registrazione del Service Worker fallita:', error);
-          });
-      });
-    }
-
-    // Il tuo JavaScript esistente
-
-
-    // Elementi del DOM
+   // Elementi del DOM
     const startScreen = document.getElementById('start-screen');
     const gameScreen = document.getElementById('game-screen');
     const gameOverScreen = document.getElementById('game-over-screen');
@@ -259,8 +239,8 @@
     let shootingDirection = 'horizontal'; // 'horizontal' o 'vertical'
     
     // Dimensioni gioco
-    const gameWidth = 800;
-    const gameHeight = 600;
+    const gameWidth = window.innerWidth;
+    const gameHeight = window.innerHeight;
     const playerWidth = 120; // 1.5x dimensione originale
     const playerHeight = 120; // 1.5x dimensione originale
     const enemyWidth = 105; // 1.5x dimensione originale
@@ -339,31 +319,29 @@
     }
     
     // Funzione per sparare proiettili
-    function fireProjectile() {
+    function fireProjectile(targetX, targetY) {
       const projectile = document.createElement('img');
       projectile.src = 'https://i.postimg.cc/Jz9mjPw9/proiettile.png';
       projectile.className = 'projectile';
       gameScreen.appendChild(projectile);
       
-      let x, y;
-      
-      if (shootingDirection === 'horizontal') {
-        x = playerPosition.x + playerWidth;
-        y = playerPosition.y + playerHeight / 2 - projectileHeight / 2;
-        projectile.style.transform = 'rotate(0deg)';
-      } else {
-        x = playerPosition.x + playerWidth / 2 - projectileWidth / 2;
-        y = playerPosition.y - projectileHeight;
-        projectile.style.transform = 'rotate(90deg)';
-      }
+      // Posizione iniziale del proiettile
+      const x = playerPosition.x + playerWidth / 2;
+      const y = playerPosition.y + playerHeight / 2;
       
       projectile.style.left = x + 'px';
       projectile.style.top = y + 'px';
       
+      // Calcola la direzione del proiettile
+      const deltaX = targetX - x;
+      const deltaY = targetY - y;
+      const angle = Math.atan2(deltaY, deltaX);
+      
+      // Aggiungi il proiettile alla lista
       projectiles.push({
         element: projectile,
         position: { x, y },
-        direction: shootingDirection
+        angle: angle
       });
     }
     
@@ -498,24 +476,25 @@
       for (let i = projectiles.length - 1; i >= 0; i--) {
         const projectile = projectiles[i];
         
-        if (projectile.direction === 'horizontal') {
-          projectile.position.x += projectileSpeed;
-          projectile.element.style.left = projectile.position.x + 'px';
-          
-          // Rimuovi proiettili fuori schermo
-          if (projectile.position.x > gameWidth) {
-            gameScreen.removeChild(projectile.element);
-            projectiles.splice(i, 1);
-          }
-        } else {
-          projectile.position.y -= projectileSpeed;
-          projectile.element.style.top = projectile.position.y + 'px';
-          
-          // Rimuovi proiettili fuori schermo
-          if (projectile.position.y < -projectileHeight) {
-            gameScreen.removeChild(projectile.element);
-            projectiles.splice(i, 1);
-          }
+        // Calcola il movimento del proiettile
+        const speedX = Math.cos(projectile.angle) * projectileSpeed;
+        const speedY = Math.sin(projectile.angle) * projectileSpeed;
+        
+        projectile.position.x += speedX;
+        projectile.position.y += speedY;
+        
+        projectile.element.style.left = projectile.position.x + 'px';
+        projectile.element.style.top = projectile.position.y + 'px';
+        
+        // Rimuovi proiettili fuori schermo
+        if (
+          projectile.position.x < -projectileWidth ||
+          projectile.position.x > gameWidth ||
+          projectile.position.y < -projectileHeight ||
+          projectile.position.y > gameHeight
+        ) {
+          gameScreen.removeChild(projectile.element);
+          projectiles.splice(i, 1);
         }
       }
       
@@ -562,7 +541,7 @@
       
       // Sparo con barra spaziatrice
       if (e.key === ' ' && gameRunning) {
-        fireProjectile();
+        fireProjectile(playerPosition.x + playerWidth, playerPosition.y + playerHeight / 2);
         e.preventDefault();
       }
       
@@ -575,6 +554,18 @@
     
     document.addEventListener('keyup', (e) => {
       keys[e.key] = false;
+    });
+    
+    // Event listener per il click del mouse
+    document.addEventListener('click', (e) => {
+      if (!gameRunning) return;
+      
+      // Ottieni la posizione del click
+      const mouseX = e.clientX - gameScreen.getBoundingClientRect().left;
+      const mouseY = e.clientY - gameScreen.getBoundingClientRect().top;
+      
+      // Sparo verso la posizione del mouse
+      fireProjectile(mouseX, mouseY);
     });
     
     // Event listener per i pulsanti
